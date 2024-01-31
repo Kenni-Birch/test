@@ -1,0 +1,12 @@
+﻿{
+  "deletions": [
+    {
+      "xpath": "/root/publications",
+      "operation": "culture"
+    },
+    {
+      "xpath": "/root/NameNode",
+      "operation": "culture"
+    }
+  ]
+}
