@@ -8,5 +8,12 @@
       "xpath": "/root/NameNode",
       "operation": "culture"
     }
+  ],
+
+  "search": [
+    {
+      "xpath": "/root/properties",
+      "operation": "culture"
+    }
   ]
 }
