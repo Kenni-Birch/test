@@ -1,48 +1,35 @@
 ﻿using System.ComponentModel;
 using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using System.IO;
 using System.Net.Http.Json;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
 using System.Xml;
 using System.Xml.Linq;
+using System.Xml.XPath;
+using static ConsoleApp2.Program;
 namespace ConsoleApp2;
 
 internal class Program
 {
     static void Main(string[] args)
     {
-        if (args[0] == null)
-        {
-            throw new Exception("Invalid arguments");
-        }
+        List<string> files = Directory.GetFiles("C:/Users/aktiv/Desktop/content").ToList();
 
-        Stopwatch stopwatch = new Stopwatch();
+        var settings = Config("search");
 
-        stopwatch.Start();
+        SearchAndReport(files, settings[0]);
+        //Run(files, settings);
 
-
-        List<string> files = Directory.GetFiles(args[0]).ToList();
-        var settings = Config();
-        
-        if ( files.Count > 2 && args[1] == "-s") 
-        {
-            var segments = Segmentation(files, 3, 1);
-            var tasks = segments.Select(segment => Task.Run(() => Run(segment, settings)));
-            Task.WhenAll(tasks).Wait();
-        }
-
-        stopwatch.Stop();
-
-        long elapsedMilliseconds = stopwatch.ElapsedMilliseconds;
-
-        Console.WriteLine(elapsedMilliseconds);
     }
     public static void SearchAndDestory(List<string> files, Setting setting)
     {
-        var DOM = new XmlDocument();
+
         for (int i = 0; i < files.Count; i++)
         {
+            var DOM = new XmlDocument();
+
             DOM.Load(files[i]);
 
             XmlNode parentNode = DOM.SelectSingleNode(setting.Xpath);
@@ -63,20 +50,57 @@ internal class Program
             DOM.Save(files[i]);
         }
     }
-    public static List<Setting> Config()
+    public static void SearchAndReport(List<string> files, Setting setting)
+    {
+        List<int> counter = new List<int>();
+        foreach (var filePath in files)
+        {
+            var document = new XmlDocument();
+            document.Load(filePath);
+
+            var navigator = document.CreateNavigator();
+            var nodes = navigator.Select(setting.Xpath);
+
+            HashSet<string> set = new HashSet<string>();
+
+            foreach (XPathNavigator node in nodes)
+            {
+                Recursive(node, setting.Operation, set, counter);
+            }
+            document.Save(filePath);
+        }
+
+        Console.WriteLine("Total Count: " + counter.Count);
+    }
+
+    public static void Recursive(XPathNavigator node, string operation, HashSet<string> set, List<int> counter)
+    {
+        var attributeValue = node.GetAttribute(operation, "");
+
+        if (!string.IsNullOrEmpty(attributeValue) && !set.Add(attributeValue))
+        {
+            counter.Add(1);
+        }
+
+        foreach (XPathNavigator childNode in node.SelectChildren(XPathNodeType.Element))
+        {
+            Recursive(childNode, operation, set, counter);
+        }
+    }
+    public static List<Setting> Config(string op)
     {
         List<Setting> settings = new List<Setting>();   
         string json = File.ReadAllText("C:/Users/aktiv/Desktop/projekt/ConsoleApp2/Config.json");
-        var DOM = JsonDocument.Parse(json);
-
-        IEnumerator<JsonElement> deletionsArray = DOM.RootElement.GetProperty("deletions").EnumerateArray();
-
-        while (deletionsArray.MoveNext())
+        using (var DOM = JsonDocument.Parse(json))
         {
-            var element = deletionsArray.Current;
-            settings.Add(new Setting(element.GetProperty("xpath").GetString(), element.GetProperty("operation").GetString()));
-        }
+            IEnumerator<JsonElement> deletionsArray = DOM.RootElement.GetProperty(op).EnumerateArray();
 
+            while (deletionsArray.MoveNext())
+            {
+                var element = deletionsArray.Current;
+                settings.Add(new Setting(element.GetProperty("xpath").GetString(), element.GetProperty("operation").GetString()));
+            }
+        }
         return settings;
     }
     public static void Run(List<string> files, List<Setting> settings)
